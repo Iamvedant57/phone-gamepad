@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Phone Gamepad</title>
+<style>
+  :root {
+    --bg: #101214;
+    --panel: #1a1d21;
+    --edge: #2b3037;
+    --text: #e8eaed;
+    --muted: #8a919b;
+    --accent: #36d6a4;
+    --warn: #ff7a59;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; touch-action: none; }
+  body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+
+  #rotate { display: none; position: fixed; inset: 0; background: var(--bg); z-index: 9;
+    align-items: center; justify-content: center; text-align: center; padding: 2rem; font-size: 1.1rem; color: var(--muted); }
+  @media (orientation: portrait) { #rotate { display: flex; } }
+
+  #pad { height: 100%; display: grid; grid-template-columns: 1fr 1.5fr 1fr; gap: 10px; padding: 10px; }
+  .zone { background: var(--panel); border: 1px solid var(--edge); border-radius: 18px; position: relative; min-height: 0; }
+
+  /* Sliders */
+  .slider { overflow: hidden; touch-action: none; }
+  .slider .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--accent); opacity: .9; }
+  .slider.brake .fill { background: var(--warn); }
+  .slider .label { position: absolute; top: 12px; left: 0; right: 0; text-align: center; font-size: .85rem; color: var(--muted); pointer-events: none; z-index: 1; }
+  .slider .val { position: absolute; bottom: 12px; left: 0; right: 0; text-align: center; font-weight: 700; font-size: 1.1rem; pointer-events: none; z-index: 1; mix-blend-mode: difference; color: #fff; }
+
+  /* Centre column */
+  #centre { display: grid; grid-template-rows: auto 1fr auto; gap: 10px; min-height: 0; }
+  #top { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+  .chip { background: var(--panel); border: 1px solid var(--edge); color: var(--text); border-radius: 999px; padding: 8px 14px; font-size: .85rem; touch-action: manipulation; }
+  .chip.on { border-color: var(--accent); color: var(--accent); }
+  #status { font-size: .8rem; color: var(--muted); }
+  #status.ok { color: var(--accent); }
+
+  #wheel { overflow: hidden; touch-action: none; }
+  #wheel .track { position: absolute; left: 8%; right: 8%; top: 50%; height: 4px; margin-top: -2px; background: var(--edge); border-radius: 2px; }
+  #wheel .mid { position: absolute; left: 50%; top: 30%; bottom: 30%; width: 2px; background: var(--edge); }
+  #wheel .knob { position: absolute; top: 50%; left: 50%; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%;
+    background: var(--bg); border: 3px solid var(--accent); }
+  #wheel .read { position: absolute; top: 12px; left: 0; right: 0; text-align: center; font-size: .85rem; color: var(--muted); pointer-events: none; }
+
+  #mid-buttons { display: flex; gap: 8px; justify-content: center; }
+  .small { padding: 10px 18px; border-radius: 12px; background: var(--panel); border: 1px solid var(--edge); color: var(--text); font-size: .9rem; touch-action: none; }
+
+  /* Right column: bumpers, face buttons, dpad */
+  #side { display: grid; grid-template-rows: auto 1fr; gap: 10px; min-height: 0; }
+  #bumpers { display: flex; gap: 8px; }
+  #bumpers .btn { flex: 1; padding: 12px 0; border-radius: 12px; }
+  #cluster { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-height: 0; }
+  .dpad, .face { display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); gap: 4px; min-height: 0; }
+  .btn { background: var(--panel); border: 1px solid var(--edge); color: var(--text); border-radius: 14px; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; touch-action: none; }
+  .btn.down, .small.down { background: var(--accent); color: #07261c; border-color: var(--accent); }
+  .face .btn { border-radius: 50%; }
+  .face .y { grid-area: 1 / 2; } .face .x { grid-area: 2 / 1; } .face .b { grid-area: 2 / 3; } .face .a { grid-area: 3 / 2; }
+  .dpad .up { grid-area: 1 / 2; } .dpad .left { grid-area: 2 / 1; } .dpad .right { grid-area: 2 / 3; } .dpad .down { grid-area: 3 / 2; }
+</style>
+</head>
+<body>
+<div id="rotate">Turn your phone sideways to use the controller.</div>
+
+<div id="pad">
+  <div class="zone slider brake" id="lt"><div class="fill"></div><div class="label">Brake</div><div class="val">0%</div></div>
+
+  <div id="centre">
+    <div id="top">
+      <span id="status">Connecting…</span>
+      <div style="display:flex;gap:8px">
+        <button class="chip" id="tiltBtn">Tilt steering: off</button>
+        <button class="chip" id="fsBtn">Fullscreen</button>
+      </div>
+    </div>
+    <div class="zone" id="wheel"><div class="read">Steering 0%</div><div class="track"></div><div class="mid"></div><div class="knob"></div></div>
+    <div id="mid-buttons">
+      <div class="small" data-btn="back">Back</div>
+      <div class="small" data-btn="start">Start</div>
+    </div>
+  </div>
+
+  <div id="side">
+    <div id="bumpers"><div class="btn" data-btn="lb">LB</div><div class="btn" data-btn="rb">RB</div></div>
+    <div id="cluster">
+      <div class="dpad">
+        <div class="btn up" data-btn="up">▲</div><div class="btn left" data-btn="left">◀</div>
+        <div class="btn right" data-btn="right">▶</div><div class="btn down" data-btn="down">▼</div>
+      </div>
+      <div class="face">
+        <div class="btn y" data-btn="y">Y</div><div class="btn x" data-btn="x">X</div>
+        <div class="btn b" data-btn="b">B</div><div class="btn a" data-btn="a">A</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="zone slider" id="rt" style="grid-column:4;display:none"></div>
+</div>
+
+<script>
+(() => {
+  // The layout above has 3 columns; the gas slider is built into the right of the layout via JS below.
+  const pad = document.getElementById('pad');
+  pad.style.gridTemplateColumns = '1fr 1.5fr 1.6fr 1fr';
+  const rtEl = document.getElementById('rt');
+  rtEl.style.display = '';
+  rtEl.innerHTML = '<div class="fill"></div><div class="label">Gas</div><div class="val">0%</div>';
+
+  const state = { steer: 0, lt: 0, rt: 0 };
+  const held = new Set();
+  let tilt = false, tiltValue = 0, touchSteer = 0;
+
+  /* ---------- connection ---------- */
+  const statusEl = document.getElementById('status');
+  let ws, dirty = true;
+  function connect() {
+    ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
+    ws.onopen = () => { statusEl.textContent = 'Connected'; statusEl.className = 'ok'; dirty = true; };
+    ws.onclose = () => { statusEl.textContent = 'Reconnecting…'; statusEl.className = ''; setTimeout(connect, 1000); };
+  }
+  connect();
+
+  function send() {
+    if (!dirty || !ws || ws.readyState !== 1) return;
+    ws.send(JSON.stringify({ steer: state.steer, lt: state.lt, rt: state.rt, buttons: [...held] }));
+    dirty = false;
+  }
+  setInterval(send, 16);                       // ~60 updates/sec, only when something changed
+  setInterval(() => { dirty = true; }, 500);   // heartbeat so the PC always has fresh state
+
+  /* ---------- sliders (brake / gas) ---------- */
+  function makeSlider(el, key) {
+    const fill = el.querySelector('.fill'), val = el.querySelector('.val');
+    const set = v => {
+      state[key] = v; dirty = true;
+      fill.style.height = (v * 100) + '%';
+      val.textContent = Math.round(v * 100) + '%';
+    };
+    const fromEvent = e => { const r = el.getBoundingClientRect(); return Math.max(0, Math.min(1, 1 - (e.clientY - r.top) / r.height)); };
+    el.addEventListener('pointerdown', e => { el.setPointerCapture(e.pointerId); set(fromEvent(e)); });
+    el.addEventListener('pointermove', e => { if (el.hasPointerCapture(e.pointerId)) set(fromEvent(e)); });
+    const up = e => set(0);
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+  }
+  makeSlider(document.getElementById('lt'), 'lt');
+  makeSlider(rtEl, 'rt');
+
+  /* ---------- steering wheel (drag sideways, springs back) ---------- */
+  const wheel = document.getElementById('wheel');
+  const knob = wheel.querySelector('.knob'), read = wheel.querySelector('.read');
+  function drawSteer() {
+    const v = state.steer;
+    const half = wheel.clientWidth / 2 - 40;
+    knob.style.transform = `translateX(${v * half}px)`;
+    read.textContent = 'Steering ' + Math.round(v * 100) + '%';
+  }
+  function setSteer(v) { state.steer = Math.max(-1, Math.min(1, v)); dirty = true; drawSteer(); }
+  const steerFromEvent = e => { const r = wheel.getBoundingClientRect(); return ((e.clientX - r.left) / r.width - 0.5) * 2 * 1.15; };
+  wheel.addEventListener('pointerdown', e => { wheel.setPointerCapture(e.pointerId); touchSteer = steerFromEvent(e); if (!tilt) setSteer(touchSteer); });
+  wheel.addEventListener('pointermove', e => { if (wheel.hasPointerCapture(e.pointerId)) { touchSteer = steerFromEvent(e); if (!tilt) setSteer(touchSteer); } });
+  const wheelUp = () => { touchSteer = 0; if (!tilt) setSteer(0); };
+  wheel.addEventListener('pointerup', wheelUp);
+  wheel.addEventListener('pointercancel', wheelUp);
+
+  /* ---------- buttons ---------- */
+  document.querySelectorAll('[data-btn]').forEach(el => {
+    const name = el.dataset.btn;
+    el.addEventListener('pointerdown', e => { el.setPointerCapture(e.pointerId); held.add(name); el.classList.add('down'); dirty = true; if (navigator.vibrate) navigator.vibrate(8); });
+    const up = () => { held.delete(name); el.classList.remove('down'); dirty = true; };
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+  });
+
+  /* ---------- tilt steering (needs a secure context on most phones) ---------- */
+  const tiltBtn = document.getElementById('tiltBtn');
+  function onOrient(e) {
+    // In landscape, the phone's roll shows up in beta (or gamma, depending on rotation direction).
+    const angle = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+    let raw = angle === 270 || angle === -90 ? -e.beta : e.beta;
+    if (raw == null) return;
+    setSteer(Math.max(-1, Math.min(1, raw / 45)));   // full lock at 45 degrees
+  }
+  tiltBtn.addEventListener('click', async () => {
+    if (tilt) { tilt = false; window.removeEventListener('deviceorientation', onOrient); setSteer(0); }
+    else {
+      if (!window.isSecureContext || !('DeviceOrientationEvent' in window)) {
+        alert('Tilt needs a secure (https) connection on most phones. Touch steering still works.'); return;
+      }
+      try {
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+          if ((await DeviceOrientationEvent.requestPermission()) !== 'granted') return;
+        }
+        tilt = true; window.addEventListener('deviceorientation', onOrient);
+      } catch (err) { alert('Could not enable tilt: ' + err.message); return; }
+    }
+    tiltBtn.textContent = 'Tilt steering: ' + (tilt ? 'on' : 'off');
+    tiltBtn.classList.toggle('on', tilt);
+  });
+
+  /* ---------- misc ---------- */
+  document.getElementById('fsBtn').addEventListener('click', () => {
+    const d = document.documentElement;
+    (d.requestFullscreen || d.webkitRequestFullscreen || (() => {})).call(d);
+    if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {});
+  });
+  document.addEventListener('contextmenu', e => e.preventDefault());
+  window.addEventListener('resize', drawSteer);
+  drawSteer();
+})();
+</script>
+</body>
+</html>
